@@ -63,6 +63,7 @@ namespace AppSettings
     extern ScenesSetting CurrentScene;
     extern BoolSetting RenderLights;
     extern IntSetting MaxLightClamp;
+	extern IntSetting ShadowQuality;
     extern ClusterRasterizationModesSetting ClusterRasterizationMode;
     extern BoolSetting EnableRayTracing;
     extern IntSetting SqrtNumSamples;

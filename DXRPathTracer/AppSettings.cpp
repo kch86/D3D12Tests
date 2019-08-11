@@ -39,6 +39,7 @@ namespace AppSettings
     ScenesSetting CurrentScene;
     BoolSetting RenderLights;
     IntSetting MaxLightClamp;
+	IntSetting ShadowQuality;
     ClusterRasterizationModesSetting ClusterRasterizationMode;
     BoolSetting EnableRayTracing;
     IntSetting SqrtNumSamples;
@@ -116,10 +117,13 @@ namespace AppSettings
         ClusterRasterizationMode.Initialize("ClusterRasterizationMode", "Rendering", "Cluster Rasterization Mode", "Conservative rasterization mode to use for light binning", ClusterRasterizationModes::Conservative, 4, ClusterRasterizationModesLabels);
         Settings.AddSetting(&ClusterRasterizationMode);
 
+		ShadowQuality.Initialize("ShadowQuality", "Rendering", "Shadow Quality", "Shadow VRS", 0, 0, 4);
+		Settings.AddSetting(&ShadowQuality);
+
         EnableRayTracing.Initialize("EnableRayTracing", "Path Tracing", "Enable Ray Tracing", "", true);
         Settings.AddSetting(&EnableRayTracing);
 
-        SqrtNumSamples.Initialize("SqrtNumSamples", "Path Tracing", "Sqrt Num Samples", "The square root of the number of per-pixel sample rays to use for path tracing", 4, 1, 100);
+        SqrtNumSamples.Initialize("SqrtNumSamples", "Path Tracing", "Sqrt Num Samples", "The square root of the number of per-pixel sample rays to use for path tracing", 32, 1, 100);
         Settings.AddSetting(&SqrtNumSamples);
 
         MaxPathLength.Initialize("MaxPathLength", "Path Tracing", "Max Path Length", "Maximum path length (bounces) to use for path tracing", 3, 2, 8);
@@ -173,7 +177,7 @@ namespace AppSettings
         AlwaysResetPathTrace.Initialize("AlwaysResetPathTrace", "Debug", "Always Reset Path Trace", "", false);
         Settings.AddSetting(&AlwaysResetPathTrace);
 
-        ShowProgressBar.Initialize("ShowProgressBar", "Debug", "Show Progress Bar", "", true);
+        ShowProgressBar.Initialize("ShowProgressBar", "Debug", "Show Progress Bar", "", false);
         Settings.AddSetting(&ShowProgressBar);
 
         ConstantBufferInit cbInit;

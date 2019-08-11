@@ -30,7 +30,7 @@ namespace DX12
 {
 
 ID3D12Device5* Device = nullptr;
-ID3D12GraphicsCommandList4* CmdList = nullptr;
+ID3D12GraphicsCommandList5* CmdList = nullptr;
 ID3D12CommandQueue* GfxQueue = nullptr;
 D3D_FEATURE_LEVEL FeatureLevel = D3D_FEATURE_LEVEL_11_0;
 IDXGIFactory4* Factory = nullptr;

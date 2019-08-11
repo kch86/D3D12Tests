@@ -23,6 +23,7 @@ struct LinearDescriptorHeap;
 enum class BlendState : uint64
 {
     Disabled = 0,
+	DisabledRed,
     Additive,
     AlphaBlend,
     PreMultiplied,

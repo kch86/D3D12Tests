@@ -64,6 +64,257 @@ static uint64 CullMeshes(const Camera& camera, const Array<DirectX::BoundingBox>
     return numVisible;
 }
 
+struct OBBIntersectData
+{
+	DirectX::XMVECTOR RX0;
+	DirectX::XMVECTOR RX1;
+	DirectX::XMVECTOR RX2;
+	DirectX::XMVECTOR R0X;
+	DirectX::XMVECTOR R1X;
+	DirectX::XMVECTOR R2X;
+	DirectX::XMVECTOR AR0X;
+	DirectX::XMVECTOR AR1X;
+	DirectX::XMVECTOR AR2X;
+	DirectX::XMVECTOR ARX0;
+	DirectX::XMVECTOR ARX1;
+	DirectX::XMVECTOR ARX2;
+
+};
+
+static void OBBIntersectPrologue(OBBIntersectData& obi, const DirectX::BoundingOrientedBox& obb)
+{
+	using namespace DirectX;
+
+	XMVECTOR A_quat = XMLoadFloat4(&obb.Orientation);
+
+	XMMATRIX R = XMMatrixRotationQuaternion(A_quat);
+
+	// Rows. Note R[0,1,2]X.w = 0.
+	obi.R0X = R.r[0];
+	obi.R1X = R.r[1];
+	obi.R2X = R.r[2];
+
+	R = XMMatrixTranspose(R);
+
+	// Columns. Note RX[0,1,2].w = 0.
+	obi.RX0 = R.r[0];
+	obi.RX1 = R.r[1];
+	obi.RX2 = R.r[2];
+
+	// Absolute value of rows.
+	obi.AR0X = XMVectorAbs(obi.R0X);
+	obi.AR1X = XMVectorAbs(obi.R1X);
+	obi.AR2X = XMVectorAbs(obi.R2X);
+
+	// Absolute value of columns.
+	obi.ARX0 = XMVectorAbs(obi.RX0);
+	obi.ARX1 = XMVectorAbs(obi.RX1);
+	obi.ARX2 = XMVectorAbs(obi.RX2);
+}
+
+__forceinline static bool OBBIntersect(const OBBIntersectData& obi, const DirectX::BoundingOrientedBox& a, const DirectX::BoundingBox& _b)
+{
+	using namespace DirectX;
+	BoundingOrientedBox b(_b.Center, _b.Extents, XMFLOAT4(0.f, 0.f, 0.f, 1.f));
+
+	// Build the 3x3 rotation matrix that defines the orientation of B relative to A.
+	XMVECTOR A_quat = XMLoadFloat4(&a.Orientation);
+	XMVECTOR B_quat = XMLoadFloat4(&b.Orientation);
+
+	//assert(DirectX::Internal::XMQuaternionIsUnit(A_quat));
+	//assert(DirectX::Internal::XMQuaternionIsUnit(B_quat));
+
+	XMVECTOR Q = A_quat;// XMQuaternionMultiply(A_quat, XMQuaternionConjugate(B_quat));
+	XMMATRIX R = XMMatrixRotationQuaternion(Q);
+
+	// Compute the translation of B relative to A.
+	XMVECTOR A_cent = XMLoadFloat3(&a.Center);
+	XMVECTOR B_cent = XMLoadFloat3(&b.Center);
+	XMVECTOR t = XMVector3InverseRotate(XMVectorSubtract(B_cent, A_cent), A_quat);
+
+	//
+	// h(A) = extents of A.
+	// h(B) = extents of B.
+	//
+	// a(u) = axes of A = (1,0,0), (0,1,0), (0,0,1)
+	// b(u) = axes of B relative to A = (r00,r10,r20), (r01,r11,r21), (r02,r12,r22)
+	//  
+	// For each possible separating axis l:
+	//   d(A) = sum (for i = u,v,w) h(A)(i) * abs( a(i) dot l )
+	//   d(B) = sum (for i = u,v,w) h(B)(i) * abs( b(i) dot l )
+	//   if abs( t dot l ) > d(A) + d(B) then disjoint
+	//
+
+	// Load extents of A and B.
+	XMVECTOR h_A = XMLoadFloat3(&a.Extents);
+	XMVECTOR h_B = XMLoadFloat3(&b.Extents);
+
+	// Rows. Note R[0,1,2]X.w = 0.
+	//XMVECTOR obi.R0X = R.r[0];
+	//XMVECTOR obi.obi.R1X = R.r[1];
+	//XMVECTOR obi.R2X = R.r[2];
+
+	//R = XMMatrixTranspose(R);
+
+	//// Columns. Note RX[0,1,2].w = 0.
+	//XMVECTOR obi.RX0 = R.r[0];
+	//XMVECTOR obi.RX1 = R.r[1];
+	//XMVECTOR obi.RX2 = R.r[2];
+
+	//// Absolute value of rows.
+	//XMVECTOR AR0X = XMVectorAbs(obi.R0X);
+	//XMVECTOR AR1X = XMVectorAbs(obi.R1X);
+	//XMVECTOR AR2X = XMVectorAbs(obi.R2X);
+
+	//// Absolute value of columns.
+	//XMVECTOR ARX0 = XMVectorAbs(obi.RX0);
+	//XMVECTOR ARX1 = XMVectorAbs(obi.RX1);
+	//XMVECTOR ARX2 = XMVectorAbs(obi.RX2);
+
+	// Test each of the 15 possible seperating axii.
+	XMVECTOR d, d_A, d_B;
+
+	// l = a(u) = (1, 0, 0)
+	// t dot l = t.x
+	// d(A) = h(A).x
+	// d(B) = h(B) dot abs(r00, r01, r02)
+	d = XMVectorSplatX(t);
+	d_A = XMVectorSplatX(h_A);
+	d_B = XMVector3Dot(h_B, obi.AR0X);
+	XMVECTOR NoIntersection = XMVectorGreater(XMVectorAbs(d), XMVectorAdd(d_A, d_B));
+
+	// l = a(v) = (0, 1, 0)
+	// t dot l = t.y
+	// d(A) = h(A).y
+	// d(B) = h(B) dot abs(r10, r11, r12)
+	d = XMVectorSplatY(t);
+	d_A = XMVectorSplatY(h_A);
+	d_B = XMVector3Dot(h_B, obi.AR1X);
+	NoIntersection = XMVectorOrInt(NoIntersection,
+		XMVectorGreater(XMVectorAbs(d), XMVectorAdd(d_A, d_B)));
+
+	// l = a(w) = (0, 0, 1)
+	// t dot l = t.z
+	// d(A) = h(A).z
+	// d(B) = h(B) dot abs(r20, r21, r22)
+	d = XMVectorSplatZ(t);
+	d_A = XMVectorSplatZ(h_A);
+	d_B = XMVector3Dot(h_B, obi.AR2X);
+	NoIntersection = XMVectorOrInt(NoIntersection,
+		XMVectorGreater(XMVectorAbs(d), XMVectorAdd(d_A, d_B)));
+
+	// l = b(u) = (r00, r10, r20)
+	// d(A) = h(A) dot abs(r00, r10, r20)
+	// d(B) = h(B).x
+	d = XMVector3Dot(t, obi.RX0);
+	d_A = XMVector3Dot(h_A, obi.ARX0);
+	d_B = XMVectorSplatX(h_B);
+	NoIntersection = XMVectorOrInt(NoIntersection,
+		XMVectorGreater(XMVectorAbs(d), XMVectorAdd(d_A, d_B)));
+
+	// l = b(v) = (r01, r11, r21)
+	// d(A) = h(A) dot abs(r01, r11, r21)
+	// d(B) = h(B).y
+	d = XMVector3Dot(t, obi.RX1);
+	d_A = XMVector3Dot(h_A, obi.ARX1);
+	d_B = XMVectorSplatY(h_B);
+	NoIntersection = XMVectorOrInt(NoIntersection,
+		XMVectorGreater(XMVectorAbs(d), XMVectorAdd(d_A, d_B)));
+
+	// l = b(w) = (r02, r12, r22)
+	// d(A) = h(A) dot abs(r02, r12, r22)
+	// d(B) = h(B).z
+	d = XMVector3Dot(t, obi.RX2);
+	d_A = XMVector3Dot(h_A, obi.ARX2);
+	d_B = XMVectorSplatZ(h_B);
+	NoIntersection = XMVectorOrInt(NoIntersection,
+		XMVectorGreater(XMVectorAbs(d), XMVectorAdd(d_A, d_B)));
+
+	// l = a(u) x b(u) = (0, -r20, r10)
+	// d(A) = h(A) dot abs(0, r20, r10)
+	// d(B) = h(B) dot abs(0, r02, r01)
+	d = XMVector3Dot(t, XMVectorPermute<XM_PERMUTE_0W, XM_PERMUTE_1Z, XM_PERMUTE_0Y, XM_PERMUTE_0X>(obi.RX0, XMVectorNegate(obi.RX0)));
+	d_A = XMVector3Dot(h_A, XMVectorSwizzle<XM_SWIZZLE_W, XM_SWIZZLE_Z, XM_SWIZZLE_Y, XM_SWIZZLE_X>(obi.ARX0));
+	d_B = XMVector3Dot(h_B, XMVectorSwizzle<XM_SWIZZLE_W, XM_SWIZZLE_Z, XM_SWIZZLE_Y, XM_SWIZZLE_X>(obi.AR0X));
+	NoIntersection = XMVectorOrInt(NoIntersection,
+		XMVectorGreater(XMVectorAbs(d), XMVectorAdd(d_A, d_B)));
+
+	// l = a(u) x b(v) = (0, -r21, r11)
+	// d(A) = h(A) dot abs(0, r21, r11)
+	// d(B) = h(B) dot abs(r02, 0, r00)
+	d = XMVector3Dot(t, XMVectorPermute<XM_PERMUTE_0W, XM_PERMUTE_1Z, XM_PERMUTE_0Y, XM_PERMUTE_0X>(obi.RX1, XMVectorNegate(obi.RX1)));
+	d_A = XMVector3Dot(h_A, XMVectorSwizzle<XM_SWIZZLE_W, XM_SWIZZLE_Z, XM_SWIZZLE_Y, XM_SWIZZLE_X>(obi.ARX1));
+	d_B = XMVector3Dot(h_B, XMVectorSwizzle<XM_SWIZZLE_Z, XM_SWIZZLE_W, XM_SWIZZLE_X, XM_SWIZZLE_Y>(obi.AR0X));
+	NoIntersection = XMVectorOrInt(NoIntersection,
+		XMVectorGreater(XMVectorAbs(d), XMVectorAdd(d_A, d_B)));
+
+	// l = a(u) x b(w) = (0, -r22, r12)
+	// d(A) = h(A) dot abs(0, r22, r12)
+	// d(B) = h(B) dot abs(r01, r00, 0)
+	d = XMVector3Dot(t, XMVectorPermute<XM_PERMUTE_0W, XM_PERMUTE_1Z, XM_PERMUTE_0Y, XM_PERMUTE_0X>(obi.RX2, XMVectorNegate(obi.RX2)));
+	d_A = XMVector3Dot(h_A, XMVectorSwizzle<XM_SWIZZLE_W, XM_SWIZZLE_Z, XM_SWIZZLE_Y, XM_SWIZZLE_X>(obi.ARX2));
+	d_B = XMVector3Dot(h_B, XMVectorSwizzle<XM_SWIZZLE_Y, XM_SWIZZLE_X, XM_SWIZZLE_W, XM_SWIZZLE_Z>(obi.AR0X));
+	NoIntersection = XMVectorOrInt(NoIntersection,
+		XMVectorGreater(XMVectorAbs(d), XMVectorAdd(d_A, d_B)));
+
+	// l = a(v) x b(u) = (r20, 0, -r00)
+	// d(A) = h(A) dot abs(r20, 0, r00)
+	// d(B) = h(B) dot abs(0, r12, r11)
+	d = XMVector3Dot(t, XMVectorPermute<XM_PERMUTE_0Z, XM_PERMUTE_0W, XM_PERMUTE_1X, XM_PERMUTE_0Y>(obi.RX0, XMVectorNegate(obi.RX0)));
+	d_A = XMVector3Dot(h_A, XMVectorSwizzle<XM_SWIZZLE_Z, XM_SWIZZLE_W, XM_SWIZZLE_X, XM_SWIZZLE_Y>(obi.ARX0));
+	d_B = XMVector3Dot(h_B, XMVectorSwizzle<XM_SWIZZLE_W, XM_SWIZZLE_Z, XM_SWIZZLE_Y, XM_SWIZZLE_X>(obi.AR1X));
+	NoIntersection = XMVectorOrInt(NoIntersection,
+		XMVectorGreater(XMVectorAbs(d), XMVectorAdd(d_A, d_B)));
+
+	// l = a(v) x b(v) = (r21, 0, -r01)
+	// d(A) = h(A) dot abs(r21, 0, r01)
+	// d(B) = h(B) dot abs(r12, 0, r10)
+	d = XMVector3Dot(t, XMVectorPermute<XM_PERMUTE_0Z, XM_PERMUTE_0W, XM_PERMUTE_1X, XM_PERMUTE_0Y>(obi.RX1, XMVectorNegate(obi.RX1)));
+	d_A = XMVector3Dot(h_A, XMVectorSwizzle<XM_SWIZZLE_Z, XM_SWIZZLE_W, XM_SWIZZLE_X, XM_SWIZZLE_Y>(obi.ARX1));
+	d_B = XMVector3Dot(h_B, XMVectorSwizzle<XM_SWIZZLE_Z, XM_SWIZZLE_W, XM_SWIZZLE_X, XM_SWIZZLE_Y>(obi.AR1X));
+	NoIntersection = XMVectorOrInt(NoIntersection,
+		XMVectorGreater(XMVectorAbs(d), XMVectorAdd(d_A, d_B)));
+
+	// l = a(v) x b(w) = (r22, 0, -r02)
+	// d(A) = h(A) dot abs(r22, 0, r02)
+	// d(B) = h(B) dot abs(r11, r10, 0)
+	d = XMVector3Dot(t, XMVectorPermute<XM_PERMUTE_0Z, XM_PERMUTE_0W, XM_PERMUTE_1X, XM_PERMUTE_0Y>(obi.RX2, XMVectorNegate(obi.RX2)));
+	d_A = XMVector3Dot(h_A, XMVectorSwizzle<XM_SWIZZLE_Z, XM_SWIZZLE_W, XM_SWIZZLE_X, XM_SWIZZLE_Y>(obi.ARX2));
+	d_B = XMVector3Dot(h_B, XMVectorSwizzle<XM_SWIZZLE_Y, XM_SWIZZLE_X, XM_SWIZZLE_W, XM_SWIZZLE_Z>(obi.AR1X));
+	NoIntersection = XMVectorOrInt(NoIntersection,
+		XMVectorGreater(XMVectorAbs(d), XMVectorAdd(d_A, d_B)));
+
+	// l = a(w) x b(u) = (-r10, r00, 0)
+	// d(A) = h(A) dot abs(r10, r00, 0)
+	// d(B) = h(B) dot abs(0, r22, r21)
+	d = XMVector3Dot(t, XMVectorPermute<XM_PERMUTE_1Y, XM_PERMUTE_0X, XM_PERMUTE_0W, XM_PERMUTE_0Z>(obi.RX0, XMVectorNegate(obi.RX0)));
+	d_A = XMVector3Dot(h_A, XMVectorSwizzle<XM_SWIZZLE_Y, XM_SWIZZLE_X, XM_SWIZZLE_W, XM_SWIZZLE_Z>(obi.ARX0));
+	d_B = XMVector3Dot(h_B, XMVectorSwizzle<XM_SWIZZLE_W, XM_SWIZZLE_Z, XM_SWIZZLE_Y, XM_SWIZZLE_X>(obi.AR2X));
+	NoIntersection = XMVectorOrInt(NoIntersection,
+		XMVectorGreater(XMVectorAbs(d), XMVectorAdd(d_A, d_B)));
+
+	// l = a(w) x b(v) = (-r11, r01, 0)
+	// d(A) = h(A) dot abs(r11, r01, 0)
+	// d(B) = h(B) dot abs(r22, 0, r20)
+	d = XMVector3Dot(t, XMVectorPermute<XM_PERMUTE_1Y, XM_PERMUTE_0X, XM_PERMUTE_0W, XM_PERMUTE_0Z>(obi.RX1, XMVectorNegate(obi.RX1)));
+	d_A = XMVector3Dot(h_A, XMVectorSwizzle<XM_SWIZZLE_Y, XM_SWIZZLE_X, XM_SWIZZLE_W, XM_SWIZZLE_Z>(obi.ARX1));
+	d_B = XMVector3Dot(h_B, XMVectorSwizzle<XM_SWIZZLE_Z, XM_SWIZZLE_W, XM_SWIZZLE_X, XM_SWIZZLE_Y>(obi.AR2X));
+	NoIntersection = XMVectorOrInt(NoIntersection,
+		XMVectorGreater(XMVectorAbs(d), XMVectorAdd(d_A, d_B)));
+
+	// l = a(w) x b(w) = (-r12, r02, 0)
+	// d(A) = h(A) dot abs(r12, r02, 0)
+	// d(B) = h(B) dot abs(r21, r20, 0)
+	d = XMVector3Dot(t, XMVectorPermute<XM_PERMUTE_1Y, XM_PERMUTE_0X, XM_PERMUTE_0W, XM_PERMUTE_0Z>(obi.RX2, XMVectorNegate(obi.RX2)));
+	d_A = XMVector3Dot(h_A, XMVectorSwizzle<XM_SWIZZLE_Y, XM_SWIZZLE_X, XM_SWIZZLE_W, XM_SWIZZLE_Z>(obi.ARX2));
+	d_B = XMVector3Dot(h_B, XMVectorSwizzle<XM_SWIZZLE_Y, XM_SWIZZLE_X, XM_SWIZZLE_W, XM_SWIZZLE_Z>(obi.AR2X));
+	NoIntersection = XMVectorOrInt(NoIntersection,
+		XMVectorGreater(XMVectorAbs(d), XMVectorAdd(d_A, d_B)));
+
+	// No seperating axis found, boxes must intersect.
+	return XMVector4NotEqualInt(NoIntersection, XMVectorTrueInt()) ? true : false;
+}
+
 // Frustum culls meshes for an orthographic projection, and produces a buffer of visible mesh indices
 static uint64 CullMeshesOrthographic(const OrthographicCamera& camera, bool ignoreNearZ, const Array<DirectX::BoundingBox>& boundingBoxes, Array<uint32>& drawIndices)
 {
@@ -81,12 +332,16 @@ static uint64 CullMeshesOrthographic(const OrthographicCamera& camera, bool igno
     obb.Extents = extents.ToXMFLOAT3();
     obb.Center = center.ToXMFLOAT3();
     obb.Orientation = camera.Orientation().ToXMFLOAT4();
+	
+	OBBIntersectData obiData;
+	OBBIntersectPrologue(obiData, obb);
 
     uint64 numVisible = 0;
     const uint64 numMeshes = boundingBoxes.Size();
     for(uint64 i = 0; i < numMeshes; ++i)
     {
-        if(obb.Intersects(boundingBoxes[i]))
+        //if(obb.Intersects(boundingBoxes[i]))
+		if(OBBIntersect(obiData, obb, boundingBoxes[i]))
             drawIndices[numVisible++] = uint32(i);
     }
 
@@ -101,6 +356,7 @@ void MeshRenderer::LoadShaders()
 {
     // Load the mesh shaders
     meshDepthVS = CompileFromFile(L"DepthOnly.hlsl", "VS", ShaderType::Vertex);
+	meshDepthPS = CompileFromFile(L"DepthOnly.hlsl", "PS", ShaderType::Pixel);
 
     CompileOptions opts;
     meshVS = CompileFromFile(L"Mesh.hlsl", "VS", ShaderType::Vertex, opts);
@@ -154,6 +410,18 @@ void MeshRenderer::Initialize(const Model* model_)
         dbInit.Name = L"Spot Light Shadow Map";
         spotLightDepthMap.Initialize(dbInit);
     }
+
+	{
+		RenderTextureInit rtInit;
+		rtInit.Width = SunShadowMapSize;
+		rtInit.Height = SunShadowMapSize;
+		rtInit.Format = DXGI_FORMAT_R32_FLOAT;
+		rtInit.MSAASamples = ShadowHelper::NumMSAASamples();
+		rtInit.ArraySize = NumCascades;
+		rtInit.InitialState = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+		rtInit.Name = L"Sun Target";
+		sunDepthTexture.Initialize(rtInit);
+	}
 
     const uint64 numMaterialTextures = model->MaterialTextures().Count();
 
@@ -285,6 +553,7 @@ void MeshRenderer::Shutdown()
 {
     DestroyPSOs();
     sunDepthMap.Shutdown();
+	sunDepthTexture.Shutdown();
     spotLightDepthMap.Shutdown();
     materialBuffer.Shutdown();
     DX12::Release(mainPassRootSignature);
@@ -327,14 +596,16 @@ void MeshRenderer::CreatePSOs(DXGI_FORMAT mainRTFormat, DXGI_FORMAT depthFormat,
         // Depth-only PSO
         D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
         psoDesc.pRootSignature = depthRootSignature;
-        psoDesc.VS = meshVS.ByteCode();
+        psoDesc.VS = meshDepthVS.ByteCode();
+		psoDesc.PS = meshDepthPS.ByteCode();
         psoDesc.RasterizerState = DX12::GetRasterizerState(RasterizerState::BackFaceCull);
-        psoDesc.BlendState = DX12::GetBlendState(BlendState::Disabled);
+        psoDesc.BlendState = DX12::GetBlendState(BlendState::DisabledRed);
         psoDesc.DepthStencilState = DX12::GetDepthState(DepthState::WritesEnabled);
         psoDesc.SampleMask = UINT_MAX;
         psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-        psoDesc.NumRenderTargets = 0;
+        psoDesc.NumRenderTargets = 1;
         psoDesc.DSVFormat = depthFormat;
+		psoDesc.RTVFormats[0] = DXGI_FORMAT_R32_FLOAT;
         psoDesc.SampleDesc.Count = numMSAASamples;
         psoDesc.SampleDesc.Quality = numMSAASamples > 1 ? DX12::StandardMSAAPattern : 0;
         psoDesc.InputLayout.NumElements = uint32(Model::NumInputElements());
@@ -414,7 +685,7 @@ void MeshRenderer::RenderMainPass(ID3D12GraphicsCommandList* cmdList, const Came
 
     uint32 psSRVs[] =
     {
-        sunDepthMap.SRV(),
+		sunDepthTexture.SRV(),
         spotLightDepthMap.SRV(),
         materialBuffer.SRV,
         mainPassData.SpotLightClusterBuffer->SRV,
@@ -497,7 +768,11 @@ void MeshRenderer::RenderDepth(ID3D12GraphicsCommandList* cmdList, const Camera&
 // Renders all meshes using depth-only rendering for a sun shadow map
 void MeshRenderer::RenderSunShadowDepth(ID3D12GraphicsCommandList* cmdList, const OrthographicCamera& camera)
 {
+	uint64 timer = Profiler::GlobalProfiler.StartCPUProfile("Sun Shadow Culling");
     const uint64 numVisible = CullMeshesOrthographic(camera, true, meshBoundingBoxes, frustumCulledIndices);
+	Profiler::GlobalProfiler.EndCPUProfile(timer);
+
+	CPUProfileBlock cpuProfileBlock("Sun Shadow Depth");
     RenderDepth(cmdList, camera, sunShadowPSO, numVisible, frustumCulledIndices.Data());
 }
 
@@ -519,6 +794,25 @@ void MeshRenderer::RenderSunShadowMap(ID3D12GraphicsCommandList* cmdList, const 
 
     // Transition all of the cascade array slices to a writable state
     sunDepthMap.MakeWritable(cmdList);
+	sunDepthTexture.MakeWritable(cmdList);
+
+	ID3D12GraphicsCommandList5* vrsCmdList = static_cast<ID3D12GraphicsCommandList5*>(cmdList);
+	int32 quality = AppSettings::ShadowQuality;
+	switch (quality)
+	{
+		case 0:
+			vrsCmdList->RSSetShadingRate(D3D12_SHADING_RATE_1X1, nullptr);
+			break;
+		case 1:
+			vrsCmdList->RSSetShadingRate(D3D12_SHADING_RATE_2X2, nullptr);
+			break;
+		case 2:
+			vrsCmdList->RSSetShadingRate(D3D12_SHADING_RATE_4X4, nullptr);
+			break;
+		default:
+			vrsCmdList->RSSetShadingRate(D3D12_SHADING_RATE_1X1, nullptr);
+			break;
+	}
 
     // Render the meshes to each cascade
     for(uint64 cascadeIdx = 0; cascadeIdx < NumCascades; ++cascadeIdx)
@@ -528,9 +822,13 @@ void MeshRenderer::RenderSunShadowMap(ID3D12GraphicsCommandList* cmdList, const 
         // Set the viewport
         DX12::SetViewport(cmdList, SunShadowMapSize, SunShadowMapSize);
 
+		float color[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
+
         // Set the shadow map as the depth target
         D3D12_CPU_DESCRIPTOR_HANDLE dsv = sunDepthMap.ArrayDSVs[cascadeIdx];
-        cmdList->OMSetRenderTargets(0, nullptr, false, &dsv);
+		D3D12_CPU_DESCRIPTOR_HANDLE rtv = sunDepthTexture.ArrayRTVs[cascadeIdx];
+        cmdList->OMSetRenderTargets(1, &rtv, false, &dsv);
+		cmdList->ClearRenderTargetView(rtv, color, 0, 0);
         cmdList->ClearDepthStencilView(dsv, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL, 1.0f, 0, 0, nullptr);
 
         // Draw the mesh with depth only, using the new shadow camera
@@ -538,7 +836,10 @@ void MeshRenderer::RenderSunShadowMap(ID3D12GraphicsCommandList* cmdList, const 
         RenderSunShadowDepth(cmdList, cascadeCam);
     }
 
+	vrsCmdList->RSSetShadingRate(D3D12_SHADING_RATE_1X1, nullptr);
+
     sunDepthMap.MakeReadable(cmdList);
+	sunDepthTexture.MakeReadable(cmdList);
 }
 
 // Render shadows for all spot lights

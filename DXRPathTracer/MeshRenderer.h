@@ -85,6 +85,7 @@ protected:
 
     const Model* model = nullptr;
 
+	RenderTexture sunDepthTexture;
     DepthBuffer sunDepthMap;
     DepthBuffer spotLightDepthMap;
     Float4x4 spotLightShadowMatrices[AppSettings::MaxSpotLights];
@@ -99,6 +100,7 @@ protected:
     ID3D12RootSignature* mainPassRootSignature = nullptr;
 
     CompiledShaderPtr meshDepthVS;
+	CompiledShaderPtr meshDepthPS;
     ID3D12PipelineState* depthPSO = nullptr;
     ID3D12PipelineState* sunShadowPSO = nullptr;
     ID3D12PipelineState* spotLightShadowPSO = nullptr;

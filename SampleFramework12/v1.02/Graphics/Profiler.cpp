@@ -36,6 +36,7 @@ struct ProfileData
     bool CPUProfile = false;
     int64 StartTime = 0;
     int64 EndTime = 0;
+	int64 ElapsedTime = 0;
 
     static const uint64 FilterSize = 64;
     double TimeSamples[FilterSize] = { };
@@ -155,7 +156,7 @@ uint64 Profiler::StartCPUProfile(const char* name)
 
     ProfileData& profileData = cpuProfiles[profileIdx];
     Assert_(profileData.QueryStarted == false);
-    Assert_(profileData.QueryFinished == false);
+    //Assert_(profileData.QueryFinished == false);
     profileData.CPUProfile = true;
     profileData.Active = true;
 
@@ -173,10 +174,11 @@ void Profiler::EndCPUProfile(uint64 idx)
 
     ProfileData& profileData = cpuProfiles[idx];
     Assert_(profileData.QueryStarted == true);
-    Assert_(profileData.QueryFinished == false);
+    //Assert_(profileData.QueryFinished == false);
 
     timer.Update();
     profileData.EndTime = timer.ElapsedMicroseconds();
+	profileData.ElapsedTime += profileData.EndTime - profileData.StartTime;
 
     profileData.QueryStarted = false;
     profileData.QueryFinished = true;
@@ -189,7 +191,8 @@ static void UpdateProfile(ProfileData& profile, uint64 profileIdx, bool drawText
     double time = 0.0f;
     if(profile.CPUProfile)
     {
-        time = double(profile.EndTime - profile.StartTime) / 1000.0;
+        time = double(profile.ElapsedTime) / 1000.0;
+		profile.ElapsedTime = 0;
     }
     else if(frameQueryData)
     {
