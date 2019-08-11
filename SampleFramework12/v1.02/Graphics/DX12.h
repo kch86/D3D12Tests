@@ -22,7 +22,7 @@ const uint64 RenderLatency = 2;
 
 // Externals
 extern ID3D12Device5* Device;
-extern ID3D12GraphicsCommandList4* CmdList;
+extern ID3D12GraphicsCommandList5* CmdList;
 extern ID3D12CommandQueue* GfxQueue;
 extern D3D_FEATURE_LEVEL FeatureLevel;
 extern IDXGIFactory4* Factory;

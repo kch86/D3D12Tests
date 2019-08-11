@@ -199,16 +199,26 @@ void DXRPathTracer::Initialize()
     }
 
     // Check if the device supports conservative rasterization
-    D3D12_FEATURE_DATA_D3D12_OPTIONS features = { };
-    DX12::Device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS, &features, sizeof(features));
-    if(features.ResourceBindingTier < D3D12_RESOURCE_BINDING_TIER_2)
-        throw Exception("This demo requires a GPU that supports FEATURE_LEVEL_11_1 with D3D12_RESOURCE_BINDING_TIER_2");
+	{
+		D3D12_FEATURE_DATA_D3D12_OPTIONS features = { };
+		DX12::Device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS, &features, sizeof(features));
+		if (features.ResourceBindingTier < D3D12_RESOURCE_BINDING_TIER_2)
+			throw Exception("This demo requires a GPU that supports FEATURE_LEVEL_11_1 with D3D12_RESOURCE_BINDING_TIER_2");
 
-    if(features.ConservativeRasterizationTier == D3D12_CONSERVATIVE_RASTERIZATION_TIER_NOT_SUPPORTED)
-    {
-        AppSettings::ClusterRasterizationMode.SetValue(ClusterRasterizationModes::MSAA8x);
-        AppSettings::ClusterRasterizationMode.ClampNumValues(uint32(ClusterRasterizationModes::NumValues) - 1);
-    }
+		if (features.ConservativeRasterizationTier == D3D12_CONSERVATIVE_RASTERIZATION_TIER_NOT_SUPPORTED)
+		{
+			AppSettings::ClusterRasterizationMode.SetValue(ClusterRasterizationModes::MSAA8x);
+			AppSettings::ClusterRasterizationMode.ClampNumValues(uint32(ClusterRasterizationModes::NumValues) - 1);
+		}
+	}
+    
+	// check VRS
+	{
+		D3D12_FEATURE_DATA_D3D12_OPTIONS6  features = { };
+		DX12::Device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS6, &features, sizeof(features));
+		if (features.VariableShadingRateTier < D3D12_VARIABLE_SHADING_RATE_TIER_2)
+			throw Exception("This demo requires a GPU that supports D3D12_VARIABLE_SHADING_RATE_TIER_2");
+	}
 
     float aspect = float(swapChain.Width()) / swapChain.Height();
     camera.Initialize(aspect, Pi_4, 0.1f, 100.0f);
