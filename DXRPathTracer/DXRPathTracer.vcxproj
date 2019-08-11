@@ -14,19 +14,19 @@
     <ProjectGuid>{FA705507-9C58-4413-8878-8795F3B9897D}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
     <RootNamespace>DXRPathTracer</RootNamespace>
-    <WindowsTargetPlatformVersion>10.0.17763.0</WindowsTargetPlatformVersion>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v141</PlatformToolset>
+    <PlatformToolset>v142</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v141</PlatformToolset>
+    <PlatformToolset>v142</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
@@ -65,6 +65,9 @@
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
+    <CustomBuild>
+      <Command>copy "%(FullPath)" $(OutDir)%(Filename)%(Extension)</Command>
+    </CustomBuild>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -210,25 +213,25 @@
   <ItemGroup>
     <CustomBuild Include="..\Externals\WinPixEventRuntime\bin\WinPixEventRuntime.dll">
       <FileType>Document</FileType>
+      <Message>Copying external DLL (%(FullPath))</Message>
     </CustomBuild>
   </ItemGroup>
   <ItemGroup>
     <CustomBuild Include="..\Externals\DXCompiler\Bin\dxcompiler.dll">
       <FileType>Document</FileType>
+      <Message>Copying external DLL (%(FullPath))</Message>
     </CustomBuild>
   </ItemGroup>
   <ItemGroup>
     <CustomBuild Include="..\Externals\Assimp-4.1.0\bin\assimp-vc140-mt.dll">
       <FileType>Document</FileType>
-      <Message Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Copying external DLL (%(Filename)%(Extension))</Message>
-      <Message Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Copying external DLL (%(Filename)%(Extension))</Message>
+      <Message>Copying external DLL (%(FullPath))</Message>
     </CustomBuild>
   </ItemGroup>
   <ItemGroup>
-    <CustomBuild Include="$(WindowsSdkDir)\bin\$(WindowsTargetPlatformVersion)\x64\dxil.dll">
+    <CustomBuild Include="$(WDKBinRoot)\x64\dxil.dll">
       <FileType>Document</FileType>
-      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">copy "%(FullPath)" $(OutDir)%(Filename)%(Extension)</Command>
-      <Command Condition="'$(Configuration)|$(Platform)'=='Release|x64'">copy "%(FullPath)" $(OutDir)%(Filename)%(Extension)</Command>
+      <Message>Copying external DLL (%(FullPath))</Message>
     </CustomBuild>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

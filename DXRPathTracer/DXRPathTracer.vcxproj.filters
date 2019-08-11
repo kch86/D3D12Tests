@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
     <ClCompile Include="MeshRenderer.cpp" />
@@ -318,7 +318,7 @@
     <CustomBuild Include="..\Externals\Assimp-4.1.0\bin\assimp-vc140-mt.dll">
       <Filter>SampleFramework12\External DLLs</Filter>
     </CustomBuild>
-    <CustomBuild Include="$(WindowsSdkDir)\bin\$(WindowsTargetPlatformVersion)\x64\dxil.dll">
+    <CustomBuild Include="$(WDKBinRoot)\x64\dxil.dll">
       <Filter>SampleFramework12\External DLLs</Filter>
     </CustomBuild>
   </ItemGroup>
